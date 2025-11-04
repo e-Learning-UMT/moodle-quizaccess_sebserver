@@ -147,6 +147,7 @@ class quizaccess_sebserver extends access_rule_base {
 
         $connection = self::sebserverconnectiondetails(1);
         $readonlymanageddevices = '';
+        $templates = [];
         if (empty($connection)) {
             $mform->addElement('html',
                     '<div class="alert alert-warning alert-block fade in">' .
@@ -409,7 +410,7 @@ class quizaccess_sebserver extends access_rule_base {
                     $autologinurl = new moodle_url('/mod/quiz/accessrule/sebserver/sebclientautologin.php?',
                                                 $params);
                 } else {
-                    $autologinurl = $url;
+                    $autologinurl = new moodle_url('/mod/quiz/accessrule/sebserver/config.php?cmid=' . $cmid);
                 }
                 is_https() ? $autologinurl->set_scheme('sebs') : $autologinurl->set_scheme('seb');
                 // End of autologin area.
@@ -428,7 +429,7 @@ class quizaccess_sebserver extends access_rule_base {
                 is_https() ? $url->set_scheme('https') : $url->set_scheme('http');
                 $url->param('forcedownload', 1);
                 $return .= ' ' . html_writer::link(
-                    $url.'?forcedownload=1',
+                    $url,
                     get_string('downloadsebserverconfig', 'quizaccess_sebserver'),
                     ['class' => 'btn btn-primary',
                     'id'     => 'id_downloadsebserverconfigfile']
@@ -496,6 +497,10 @@ class quizaccess_sebserver extends access_rule_base {
         }
         if ($sebservertemplateid == -1 && $sebserverenabled == 1) {
             $errors['sebservertemplateid'] = get_string('templatemustbeselected', 'quizaccess_sebserver');
+            return $errors;
+        }
+        if ($data['sebserverquitsecret'] !== null && $data['sebserverquitsecret'] !== trim($data['sebserverquitsecret'])) {
+            $errors['sebserverquitsecret'] = get_string('err_wrappingwhitespace', 'core_form');
             return $errors;
         }
 
@@ -568,6 +573,15 @@ class quizaccess_sebserver extends access_rule_base {
             $DB->delete_records('quizaccess_sebserver', ['sebserverquizid' => $quiz->id]);
             $DB->set_field('quizaccess_seb_quizsettings', 'allowedbrowserexamkeys',
                             null, ['quizid' => $quiz->id]);
+            // Delete the seb cache just in case.
+            $sebcache = \cache::make('quizaccess_seb', 'config');
+            $sebcache->delete($quiz->id);
+
+            $quizsettingscache = \cache::make('quizaccess_seb', 'quizsettings');
+            $quizsettingscache->delete($quiz->id);
+
+            $configkeycache = \cache::make('quizaccess_seb', 'configkey');
+            $configkeycache->delete($quiz->id);
         } else {
             $rec = $DB->get_record('quizaccess_sebserver', ['sebserverquizid' => $quiz->id]);
             if (!$rec) {
